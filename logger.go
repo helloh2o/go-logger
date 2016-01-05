@@ -2,7 +2,6 @@ package logger
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -143,7 +142,7 @@ func moduleOf(file string) string {
 	return "UNKNOWN"
 }
 
-func (l *Logger) formatHeader(buf *bytes.Buffer, t time.Time, file string, line int, lvl int, reqId string) {
+func (l *Logger) formatHeader(buf *bytes.Buffer, t time.Time, file string, line int, lvl int) {
 	if l.prefix != "" {
 		buf.WriteString(l.prefix)
 	}
@@ -170,11 +169,6 @@ func (l *Logger) formatHeader(buf *bytes.Buffer, t time.Time, file string, line 
 			}
 			buf.WriteByte(' ')
 		}
-	}
-	if reqId != "" {
-		buf.WriteByte('[')
-		buf.WriteString(reqId)
-		buf.WriteByte(']')
 	}
 	if l.flag&Llevel != 0 {
 		buf.WriteString(LEVEL_NAMES[lvl])
@@ -209,7 +203,7 @@ func (l *Logger) formatHeader(buf *bytes.Buffer, t time.Time, file string, line 
 // already a newline.  callDepth is used to recover the PC and is
 // provided for generality, although at the moment on all pre-defined
 // paths it will be 2.
-func (l *Logger) Output(reqId string, level int, callDepth int, s string) error {
+func (l *Logger) Output(level int, callDepth int, s string) error {
 	if level < l.level {
 		return nil
 	}
@@ -236,7 +230,7 @@ func (l *Logger) Output(reqId string, level int, callDepth int, s string) error 
 	}
 	l.levelStats[level]++
 	l.buf.Reset()
-	l.formatHeader(&l.buf, now, file, line, level, reqId)
+	l.formatHeader(&l.buf, now, file, line, level)
 	l.buf.WriteString(s)
 	if len(s) > 0 && s[len(s)-1] != '\n' {
 		l.buf.WriteByte('\n')
@@ -248,7 +242,7 @@ func (l *Logger) Output(reqId string, level int, callDepth int, s string) error 
 // check new day. if new day, then create new log file
 func (l *Logger) checkFile() error {
 	now := time.Now()
-	if now.Year() > l.create.Year() || now.Month() > l.create.Month() || now.Day() > l.create.Day() {
+	if (now.Year() > l.create.Year()) || (now.Month() > l.create.Month()) || (now.Day() > l.create.Day()) {
 		l.mu.Lock()
 		defer l.mu.Unlock()
 
@@ -260,10 +254,12 @@ func (l *Logger) checkFile() error {
 			return err
 		}
 
-		// close
+		// close old out
 		if f, ok := l.out.(*os.File); ok {
-			f.Close()
-			return errors.New("f.out close fail.")
+			if err := f.Close(); err != nil {
+				console.Error(err)
+				return err
+			}
 		}
 
 		l.out = newOut
@@ -275,100 +271,100 @@ func (l *Logger) checkFile() error {
 // Printf calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Printf.
 func (l *Logger) Printf(format string, v ...interface{}) {
-	l.Output("", INFO, 2, fmt.Sprintf(format, v...))
+	l.Output(INFO, 2, fmt.Sprintf(format, v...))
 }
 
 // Print calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Print.
 func (l *Logger) Print(v ...interface{}) {
-	l.Output("", INFO, 2, fmt.Sprint(v...))
+	l.Output(INFO, 2, fmt.Sprint(v...))
 }
 
 // Println calls l.Output to print to the logger.
 // Arguments are handled in the manner of fmt.Println.
 func (l *Logger) Println(v ...interface{}) {
-	l.Output("", INFO, 2, fmt.Sprintln(v...))
+	l.Output(INFO, 2, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Debugf(format string, v ...interface{}) {
 	if DEBUG < l.level {
 		return
 	}
-	l.Output("", DEBUG, 2, fmt.Sprintf(format, v...))
+	l.Output(DEBUG, 2, fmt.Sprintf(format, v...))
 }
 
 func (l *Logger) Debug(v ...interface{}) {
 	if DEBUG < l.level {
 		return
 	}
-	l.Output("", DEBUG, 2, fmt.Sprintln(v...))
+	l.Output(DEBUG, 2, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Infof(format string, v ...interface{}) {
 	if INFO < l.level {
 		return
 	}
-	l.Output("", INFO, 2, fmt.Sprintf(format, v...))
+	l.Output(INFO, 2, fmt.Sprintf(format, v...))
 }
 
 func (l *Logger) Info(v ...interface{}) {
 	if INFO < l.level {
 		return
 	}
-	l.Output("", INFO, 2, fmt.Sprintln(v...))
+	l.Output(INFO, 2, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Warnf(format string, v ...interface{}) {
-	l.Output("", WARN, 2, fmt.Sprintf(format, v...))
+	l.Output(WARN, 2, fmt.Sprintf(format, v...))
 }
 
 func (l *Logger) Warn(v ...interface{}) {
-	l.Output("", WARN, 2, fmt.Sprintln(v...))
+	l.Output(WARN, 2, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Errorf(format string, v ...interface{}) {
-	l.Output("", ERROR, 2, fmt.Sprintf(format, v...))
+	l.Output(ERROR, 2, fmt.Sprintf(format, v...))
 }
 
 func (l *Logger) Error(v ...interface{}) {
-	l.Output("", ERROR, 2, fmt.Sprintln(v...))
+	l.Output(ERROR, 2, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Fatal(v ...interface{}) {
-	l.Output("", FATAL, 2, fmt.Sprint(v...))
+	l.Output(FATAL, 2, fmt.Sprint(v...))
 	os.Exit(1)
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func (l *Logger) Fatalf(format string, v ...interface{}) {
-	l.Output("", FATAL, 2, fmt.Sprintf(format, v...))
+	l.Output(FATAL, 2, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
 // Fatalln is equivalent to l.Println() followed by a call to os.Exit(1).
 func (l *Logger) Fatalln(v ...interface{}) {
-	l.Output("", FATAL, 2, fmt.Sprintln(v...))
+	l.Output(FATAL, 2, fmt.Sprintln(v...))
 	os.Exit(1)
 }
 
 // Panic is equivalent to l.Print() followed by a call to panic().
 func (l *Logger) Panic(v ...interface{}) {
 	s := fmt.Sprint(v...)
-	l.Output("", PANIC, 2, s)
+	l.Output(PANIC, 2, s)
 	panic(s)
 }
 
 // Panicf is equivalent to l.Printf() followed by a call to panic().
 func (l *Logger) Panicf(format string, v ...interface{}) {
 	s := fmt.Sprintf(format, v...)
-	l.Output("", PANIC, 2, s)
+	l.Output(PANIC, 2, s)
 	panic(s)
 }
 
 // Panicln is equivalent to l.Println() followed by a call to panic().
 func (l *Logger) Panicln(v ...interface{}) {
 	s := fmt.Sprintln(v...)
-	l.Output("", PANIC, 2, s)
+	l.Output(PANIC, 2, s)
 	panic(s)
 }
 
@@ -379,7 +375,7 @@ func (l *Logger) Stack(v ...interface{}) {
 	n := runtime.Stack(buf, true)
 	s += string(buf[:n])
 	s += "\n"
-	l.Output("", ERROR, 2, s)
+	l.Output(ERROR, 2, s)
 }
 
 func (l *Logger) Stat() (stats []int64) {
@@ -395,13 +391,13 @@ func isExist(path string) bool {
 }
 
 // Print calls Output to print to the standard logger.
-// Arguments are handled in the manner of fmt.Print.
+// Arguments are handled in the manner of fmt.Print.`
 func Print(v ...interface{}) {
 	if std != nil {
-		std.Output("", INFO, 2, fmt.Sprint(v...))
+		std.Output(INFO, 2, fmt.Sprint(v...))
 	}
 	if isConsole {
-		console.Output("", INFO, 2, fmt.Sprint(v...))
+		console.Output(INFO, 2, fmt.Sprint(v...))
 	}
 }
 
@@ -409,10 +405,10 @@ func Print(v ...interface{}) {
 // Arguments are handled in the manner of fmt.Printf.
 func Printf(format string, v ...interface{}) {
 	if std != nil {
-		std.Output("", INFO, 2, fmt.Sprintf(format, v...))
+		std.Output(INFO, 2, fmt.Sprintf(format, v...))
 	}
 	if isConsole {
-		console.Output("", INFO, 2, fmt.Sprintf(format, v...))
+		console.Output(INFO, 2, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -420,10 +416,10 @@ func Printf(format string, v ...interface{}) {
 // Arguments are handled in the manner of fmt.Println.
 func Println(v ...interface{}) {
 	if std != nil {
-		std.Output("", INFO, 2, fmt.Sprintln(v...))
+		std.Output(INFO, 2, fmt.Sprintln(v...))
 	}
 	if isConsole {
-		console.Output("", INFO, 2, fmt.Sprintln(v...))
+		console.Output(INFO, 2, fmt.Sprintln(v...))
 	}
 }
 
@@ -432,10 +428,10 @@ func Debugf(format string, v ...interface{}) {
 		return
 	}
 
-	std.Output("", DEBUG, 2, fmt.Sprintf(format, v...))
+	std.Output(DEBUG, 2, fmt.Sprintf(format, v...))
 
 	if isConsole {
-		console.Output("", DEBUG, 2, fmt.Sprintf(format, v...))
+		console.Output(DEBUG, 2, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -444,10 +440,10 @@ func Debug(v ...interface{}) {
 		return
 	}
 
-	std.Output("", DEBUG, 2, fmt.Sprintln(v...))
+	std.Output(DEBUG, 2, fmt.Sprintln(v...))
 
 	if isConsole {
-		console.Output("", DEBUG, 2, fmt.Sprintln(v...))
+		console.Output(DEBUG, 2, fmt.Sprintln(v...))
 	}
 }
 
@@ -456,10 +452,10 @@ func Infof(format string, v ...interface{}) {
 		return
 	}
 
-	std.Output("", INFO, 2, fmt.Sprintf(format, v...))
+	std.Output(INFO, 2, fmt.Sprintf(format, v...))
 
 	if isConsole {
-		console.Output("", INFO, 2, fmt.Sprintf(format, v...))
+		console.Output(INFO, 2, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -468,10 +464,10 @@ func Info(v ...interface{}) {
 		return
 	}
 
-	std.Output("", INFO, 2, fmt.Sprintln(v...))
+	std.Output(INFO, 2, fmt.Sprintln(v...))
 
 	if isConsole {
-		console.Output("", INFO, 2, fmt.Sprintln(v...))
+		console.Output(INFO, 2, fmt.Sprintln(v...))
 	}
 }
 
@@ -480,10 +476,10 @@ func Warnf(format string, v ...interface{}) {
 		return
 	}
 
-	std.Output("", WARN, 2, fmt.Sprintf(format, v...))
+	std.Output(WARN, 2, fmt.Sprintf(format, v...))
 
 	if isConsole {
-		console.Output("", WARN, 2, fmt.Sprintf(format, v...))
+		console.Output(WARN, 2, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -492,10 +488,10 @@ func Warn(v ...interface{}) {
 		return
 	}
 
-	std.Output("", WARN, 2, fmt.Sprintln(v...))
+	std.Output(WARN, 2, fmt.Sprintln(v...))
 
 	if isConsole {
-		console.Output("", WARN, 2, fmt.Sprintln(v...))
+		console.Output(WARN, 2, fmt.Sprintln(v...))
 	}
 }
 
@@ -504,10 +500,10 @@ func Errorf(format string, v ...interface{}) {
 		return
 	}
 
-	std.Output("", ERROR, 2, fmt.Sprintf(format, v...))
+	std.Output(ERROR, 2, fmt.Sprintf(format, v...))
 
 	if isConsole {
-		console.Output("", ERROR, 2, fmt.Sprintf(format, v...))
+		console.Output(ERROR, 2, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -516,10 +512,10 @@ func Error(v ...interface{}) {
 		return
 	}
 
-	std.Output("", ERROR, 2, fmt.Sprintln(v...))
+	std.Output(ERROR, 2, fmt.Sprintln(v...))
 
 	if isConsole {
-		console.Output("", ERROR, 2, fmt.Sprintln(v...))
+		console.Output(ERROR, 2, fmt.Sprintln(v...))
 	}
 }
 
@@ -529,10 +525,10 @@ func Fatal(v ...interface{}) {
 		return
 	}
 
-	std.Output("", FATAL, 2, fmt.Sprint(v...))
+	std.Output(FATAL, 2, fmt.Sprint(v...))
 
 	if isConsole {
-		console.Output("", FATAL, 2, fmt.Sprint(v...))
+		console.Output(FATAL, 2, fmt.Sprint(v...))
 	}
 	os.Exit(1)
 }
@@ -543,10 +539,10 @@ func Fatalf(format string, v ...interface{}) {
 		return
 	}
 
-	std.Output("", FATAL, 2, fmt.Sprintf(format, v...))
+	std.Output(FATAL, 2, fmt.Sprintf(format, v...))
 
 	if isConsole {
-		console.Output("", FATAL, 2, fmt.Sprintf(format, v...))
+		console.Output(FATAL, 2, fmt.Sprintf(format, v...))
 	}
 
 	os.Exit(1)
@@ -558,10 +554,10 @@ func Fatalln(v ...interface{}) {
 		return
 	}
 
-	std.Output("", FATAL, 2, fmt.Sprintln(v...))
+	std.Output(FATAL, 2, fmt.Sprintln(v...))
 
 	if isConsole {
-		console.Output("", FATAL, 2, fmt.Sprintln(v...))
+		console.Output(FATAL, 2, fmt.Sprintln(v...))
 	}
 
 	os.Exit(1)
@@ -575,10 +571,10 @@ func Panic(v ...interface{}) {
 
 	s := fmt.Sprint(v...)
 
-	std.Output("", PANIC, 2, s)
+	std.Output(PANIC, 2, s)
 
 	if isConsole {
-		console.Output("", PANIC, 2, s)
+		console.Output(PANIC, 2, s)
 	}
 
 	panic(s)
@@ -592,10 +588,10 @@ func Panicf(format string, v ...interface{}) {
 
 	s := fmt.Sprintf(format, v...)
 
-	std.Output("", PANIC, 2, s)
+	std.Output(PANIC, 2, s)
 
 	if isConsole {
-		console.Output("", PANIC, 2, s)
+		console.Output(PANIC, 2, s)
 	}
 
 	panic(s)
@@ -609,10 +605,10 @@ func Panicln(v ...interface{}) {
 
 	s := fmt.Sprintln(v...)
 
-	std.Output("", PANIC, 2, s)
+	std.Output(PANIC, 2, s)
 
 	if isConsole {
-		console.Output("", PANIC, 2, s)
+		console.Output(PANIC, 2, s)
 	}
 
 	panic(s)
@@ -630,9 +626,9 @@ func Stack(v ...interface{}) {
 	s += string(buf[:n])
 	s += "\n"
 
-	std.Output("", ERROR, 2, s)
+	std.Output(ERROR, 2, s)
 
 	if isConsole {
-		console.Output("", ERROR, 2, s)
+		console.Output(ERROR, 2, s)
 	}
 }

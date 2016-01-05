@@ -13,7 +13,7 @@ func log(i int) {
 	Debugf("Debugf>>>>>>>>>>>>>>>>>>>>>> %d", i)
 
 	Info("Info>>>>>>>>>>>>>>>>>>>>>>>>>" + strconv.Itoa(i))
-	Debugf("Infof>>>>>>>>>>>>>>>>>>>>>> %d", i)
+	Infof("Infof>>>>>>>>>>>>>>>>>>>>>> %d", i)
 
 	Warn("Warn>>>>>>>>>>>>>>>>>>>>>>>>>" + strconv.Itoa(i))
 	Warnf("Warnf>>>>>>>>>>>>>>>>>>>>>> %d", i)
@@ -21,8 +21,8 @@ func log(i int) {
 	Error("Error>>>>>>>>>>>>>>>>>>>>>>>>>" + strconv.Itoa(i))
 	Errorf("Errorf>>>>>>>>>>>>>>>>>>>>>> %d", i)
 
-	//	Fatal("Fatal>>>>>>>>>>>>>>>>>>>>>>>>>" + strconv.Itoa(i))
-	//	Fatalf("Fatal>>>>>>>>>>>>>>>>>>>>>>>>>%d", i)
+//	Fatal("Fatal>>>>>>>>>>>>>>>>>>>>>>>>>" + strconv.Itoa(i))
+//	Fatalf("Fatal>>>>>>>>>>>>>>>>>>>>>>>>>%d", i)
 
 	wg.Done()
 }
@@ -31,9 +31,9 @@ func TestMain(t *testing.M) {
 	Init(".", "filename", DEBUG)
 
 	//指定是否控制台打印，默认为false
-	//	SetConsole(true)
+//	SetConsole(true)
 
-	for i := 10; i > 0; i-- {
+	for i := 100; i > 0; i-- {
 		wg.Add(1)
 		log(i)
 	}
