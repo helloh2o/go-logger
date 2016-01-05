@@ -38,6 +38,8 @@ const (
 	FATAL
 )
 
+const LOG_SUFIX  = ".log"
+
 var LEVEL_NAMES = []string {
 	"[DEBUG]",
 	"[INFO]",
@@ -75,61 +77,34 @@ var console = &Logger{out: os.Stdout, prefix: "", level: DEBUG, flag: Ldefault}
 var std *Logger
 
 func Init(logPath string, logFile string, level int) error {
-	out, err := os.OpenFile(logPath+"/"+logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-	if err != nil {
-		console.Error(err)
-		return err
-	}
-
-	t, _ := time.Parse(DATE_FORMAT, time.Now().Format(DATE_FORMAT))
 	std = &Logger {
-		out: out,
 		prefix: "",
 		level: level,
 		flag: Ldefault,
 		logPath: logPath,
 		logFile: logFile,
-		create: t,
+		create: time.Now(),
 	}
 
-	std.mu.Lock()
-	defer std.mu.Unlock()
-
-	if std.checkRename() {
-		return std.rename()
+	out, err := os.OpenFile(std.logfileFullName(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		console.Error(err)
+		return err
 	}
+
+	std.out = out
 
 	return nil
 }
 
 const DATE_FORMAT = "2006-01-02"
 
-func (l *Logger) checkRename() bool {
-	t, _ := time.Parse(DATE_FORMAT, time.Now().Format(DATE_FORMAT))
-	if t.After(l.create) {
-		return true
-	}
-	return false
+func (l *Logger) logfileName() string {
+	return l.logFile + "." + l.create.Format(DATE_FORMAT) + LOG_SUFIX
 }
 
-func (l *Logger) rename() error {
-	fileName := l.logPath + "/" + l.logFile + "." + l.create.Format(DATE_FORMAT)
-	if !isExist(fileName) && l.checkRename() {
-		err := os.Rename(l.logPath+"/"+l.logFile, fileName)
-		if err != nil {
-			l.Error(err)
-			return err
-		}
-		// open new file
-		l.out, err = os.OpenFile(l.logPath + "/" + l.logFile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			return err
-		}
-		l.create, _ = time.Parse(DATE_FORMAT, time.Now().Format(DATE_FORMAT))
-	} else {
-		return errors.New("rename fail, " + fileName + "exits")
-	}
-	return nil
+func (l *Logger) logfileFullName() string {
+	return l.logPath + "/" + l.logFile + "." + l.create.Format(DATE_FORMAT) + LOG_SUFIX
 }
 
 // Cheap integer to fixed-width decimal ASCII.  Give a negative width to avoid zero-padding.
@@ -238,6 +213,11 @@ func (l *Logger) Output(reqId string, level int, callDepth int, s string) error 
 	if level < l.level {
 		return nil
 	}
+
+	if err := l.checkFile(); err != nil {
+		return err
+	}
+
 	now := time.Now() // get this early.
 	var file string
 	var line int
@@ -263,6 +243,33 @@ func (l *Logger) Output(reqId string, level int, callDepth int, s string) error 
 	}
 	_, err := l.out.Write(l.buf.Bytes())
 	return err
+}
+
+// check new day. if new day, then create new log file
+func (l *Logger) checkFile() error {
+	now := time.Now()
+	if now.Year() > l.create.Year() || now.Month() > l.create.Month() || now.Day() > l.create.Day() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		l.create = now
+
+		newOut, err := os.OpenFile(l.logfileFullName(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+		if err != nil {
+			console.Error(err)
+			return err
+		}
+
+		// close
+		if f, ok := l.out.(*os.File); ok {
+			f.Close()
+			return errors.New("f.out close fail.")
+		}
+
+		l.out = newOut
+	}
+
+	return nil
 }
 
 // Printf calls l.Output to print to the logger.
