@@ -252,13 +252,13 @@ func (l *Logger) Output(level int, s string) error {
 		l.mu.Lock()
 	}
 	l.levelStats[level]++
-	l.buf.Reset()
-	l.formatHeader(&l.buf, now, file, line, level)
-	l.buf.WriteString(s)
+	buf := bytes.Buffer{}
+	l.formatHeader(&buf, now, file, line, level)
+	buf.WriteString(s)
 	if len(s) > 0 && s[len(s)-1] != '\n' {
-		l.buf.WriteByte('\n')
+		buf.WriteByte('\n')
 	}
-	_, err := l.out.Write(l.buf.Bytes())
+	_, err := l.out.Write(buf.Bytes())
 	return err
 }
 
