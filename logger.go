@@ -63,7 +63,6 @@ type Logger struct {
 	logPath      string
 	logFile      string
 	create       time.Time
-	isConsole    bool
 	showFileLine bool
 }
 
@@ -88,31 +87,35 @@ func (mw *MutexWrap) Enable() {
 	mw.enable = true
 }
 
-var console = &Logger{out: os.Stdout, prefix: "", level: DEBUG, flag: Ldefault, isConsole: true, showFileLine: true}
+var outputConsole = true
+var console = &Logger{out: os.Stdout, prefix: "", level: DEBUG, flag: Ldefault, showFileLine: true}
+var filelog *Logger
 
-var std *Logger
+func InitStdOutput(outputconsole bool, level int, showFileLine bool) {
+	outputConsole = outputconsole
+	console.level = level
+	console.showFileLine = showFileLine
+}
 
-func Init(logPath string, logFile string, level int, isConsole bool, showFileLine bool, mutex bool) error {
-	std = &Logger{
+func InitFileLog(logPath string, logFile string, level int, showFileLine bool, mutex bool) error {
+	filelog = &Logger{
 		prefix:       "",
 		level:        level,
 		flag:         Ldefault,
 		logPath:      logPath,
 		logFile:      logFile,
 		create:       time.Now(),
-		isConsole:    isConsole,
 		showFileLine: showFileLine,
 	}
 
-	std.mu.enable = mutex
+	filelog.mu.enable = mutex
 
-	file, err := os.OpenFile(std.logfileFullName(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
+	file, err := os.OpenFile(filelog.logfileFullName(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		console.Error(err)
 		return err
 	}
-
-	std.out = file
+	filelog.out = file
 
 	return nil
 }
@@ -264,6 +267,9 @@ func (l *Logger) Output(level int, s string) error {
 
 // check new day. if new day, then create new log file
 func (l *Logger) checkFile() error {
+	if l.logFile == "" {
+		return nil
+	}
 	now := time.Now()
 	if (now.Year() > l.create.Year()) || (now.Month() > l.create.Month()) || (now.Day() > l.create.Day()) {
 		l.mu.Lock()
@@ -418,10 +424,10 @@ func isExist(path string) bool {
 // Print calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Print.`
 func Print(v ...interface{}) {
-	if std != nil {
-		std.Output(INFO, fmt.Sprint(v...))
+	if filelog != nil {
+		filelog.Output(INFO, fmt.Sprint(v...))
 	}
-	if std.isConsole {
+	if outputConsole {
 		console.Output(INFO, fmt.Sprint(v...))
 	}
 }
@@ -429,10 +435,10 @@ func Print(v ...interface{}) {
 // Printf calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Printf.
 func Printf(format string, v ...interface{}) {
-	if std != nil {
-		std.Output(INFO, fmt.Sprintf(format, v...))
+	if filelog != nil {
+		filelog.Output(INFO, fmt.Sprintf(format, v...))
 	}
-	if std.isConsole {
+	if outputConsole {
 		console.Output(INFO, fmt.Sprintf(format, v...))
 	}
 }
@@ -440,119 +446,95 @@ func Printf(format string, v ...interface{}) {
 // Println calls Output to print to the standard logger.
 // Arguments are handled in the manner of fmt.Println.
 func Println(v ...interface{}) {
-	if std != nil {
-		std.Output(INFO, fmt.Sprintln(v...))
+	if filelog != nil {
+		filelog.Output(INFO, fmt.Sprintln(v...))
 	}
-	if std.isConsole {
+	if outputConsole {
 		console.Output(INFO, fmt.Sprintln(v...))
 	}
 }
 
 func Debugf(format string, v ...interface{}) {
-	if std == nil || DEBUG < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(DEBUG, fmt.Sprintf(format, v...))
 	}
 
-	std.Output(DEBUG, fmt.Sprintf(format, v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(DEBUG, fmt.Sprintf(format, v...))
 	}
 }
 
 func Debug(v ...interface{}) {
-	if std == nil || DEBUG < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(DEBUG, fmt.Sprintln(v...))
 	}
-
-	std.Output(DEBUG, fmt.Sprintln(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(DEBUG, fmt.Sprintln(v...))
 	}
 }
 
 func Infof(format string, v ...interface{}) {
-	if std == nil || INFO < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(INFO, fmt.Sprintf(format, v...))
 	}
-
-	std.Output(INFO, fmt.Sprintf(format, v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(INFO, fmt.Sprintf(format, v...))
 	}
 }
 
 func Info(v ...interface{}) {
-	if std == nil || INFO < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(INFO, fmt.Sprintln(v...))
 	}
-
-	std.Output(INFO, fmt.Sprintln(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(INFO, fmt.Sprintln(v...))
 	}
 }
 
 func Warnf(format string, v ...interface{}) {
-	if std == nil || WARN < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(WARN, fmt.Sprintf(format, v...))
 	}
-
-	std.Output(WARN, fmt.Sprintf(format, v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(WARN, fmt.Sprintf(format, v...))
 	}
 }
 
 func Warn(v ...interface{}) {
-	if std == nil || WARN < std.level {
-		return
+	if filelog != nil {
+		filelog.Output(WARN, fmt.Sprintln(v...))
 	}
-
-	std.Output(WARN, fmt.Sprintln(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(WARN, fmt.Sprintln(v...))
 	}
 }
 
 func Errorf(format string, v ...interface{}) {
-	if std == nil || ERROR < std.level {
-		return
+
+	if filelog != nil {
+		filelog.Output(ERROR, fmt.Sprintf(format, v...))
 	}
-
-	std.Output(ERROR, fmt.Sprintf(format, v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(ERROR, fmt.Sprintf(format, v...))
 	}
 }
 
 func Error(v ...interface{}) {
-	if std == nil {
-		return
+
+	if filelog != nil {
+		filelog.Output(ERROR, fmt.Sprintln(v...))
 	}
-
-	std.Output(ERROR, fmt.Sprintln(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(ERROR, fmt.Sprintln(v...))
 	}
 }
 
 // Fatal is equivalent to Print() followed by a call to os.Exit(1).
 func Fatal(v ...interface{}) {
-	if std == nil {
-		return
+	if filelog != nil {
+		filelog.Output(FATAL, fmt.Sprint(v...))
 	}
-
-	std.Output(FATAL, fmt.Sprint(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(FATAL, fmt.Sprint(v...))
 	}
 	os.Exit(1)
@@ -560,13 +542,11 @@ func Fatal(v ...interface{}) {
 
 // Fatalf is equivalent to Printf() followed by a call to os.Exit(1).
 func Fatalf(format string, v ...interface{}) {
-	if std == nil {
-		return
+
+	if filelog != nil {
+		filelog.Output(FATAL, fmt.Sprintf(format, v...))
 	}
-
-	std.Output(FATAL, fmt.Sprintf(format, v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(FATAL, fmt.Sprintf(format, v...))
 	}
 
@@ -575,30 +555,23 @@ func Fatalf(format string, v ...interface{}) {
 
 // Fatalln is equivalent to Println() followed by a call to os.Exit(1).
 func Fatalln(v ...interface{}) {
-	if std == nil {
-		return
+	if filelog != nil {
+		filelog.Output(FATAL, fmt.Sprintln(v...))
 	}
 
-	std.Output(FATAL, fmt.Sprintln(v...))
-
-	if std.isConsole {
+	if outputConsole {
 		console.Output(FATAL, fmt.Sprintln(v...))
 	}
-
 	os.Exit(1)
 }
 
 // Panic is equivalent to Print() followed by a call to panic().
 func Panic(v ...interface{}) {
-	if std == nil {
-		return
-	}
-
 	s := fmt.Sprint(v...)
-
-	std.Output(PANIC, s)
-
-	if std.isConsole {
+	if filelog != nil {
+		filelog.Output(PANIC, s)
+	}
+	if outputConsole {
 		console.Output(PANIC, s)
 	}
 
@@ -607,15 +580,12 @@ func Panic(v ...interface{}) {
 
 // Panicf is equivalent to Printf() followed by a call to panic().
 func Panicf(format string, v ...interface{}) {
-	if std == nil {
-		return
-	}
 
 	s := fmt.Sprintf(format, v...)
-
-	std.Output(PANIC, s)
-
-	if std.isConsole {
+	if filelog != nil {
+		filelog.Output(PANIC, s)
+	}
+	if outputConsole {
 		console.Output(PANIC, s)
 	}
 
@@ -624,15 +594,13 @@ func Panicf(format string, v ...interface{}) {
 
 // Panicln is equivalent to Println() followed by a call to panic().
 func Panicln(v ...interface{}) {
-	if std == nil {
-		return
-	}
 
 	s := fmt.Sprintln(v...)
 
-	std.Output(PANIC, s)
-
-	if std.isConsole {
+	if filelog != nil {
+		filelog.Output(PANIC, s)
+	}
+	if outputConsole {
 		console.Output(PANIC, s)
 	}
 
@@ -640,10 +608,6 @@ func Panicln(v ...interface{}) {
 }
 
 func Stack(v ...interface{}) {
-	if std == nil {
-		return
-	}
-
 	s := fmt.Sprint(v...)
 	s += "\n"
 	buf := make([]byte, 1024*1024)
@@ -651,9 +615,10 @@ func Stack(v ...interface{}) {
 	s += string(buf[:n])
 	s += "\n"
 
-	std.Output(ERROR, s)
-
-	if std.isConsole {
+	if filelog != nil {
+		filelog.Output(ERROR, s)
+	}
+	if outputConsole {
 		console.Output(ERROR, s)
 	}
 }
